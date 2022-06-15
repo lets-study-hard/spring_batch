@@ -17,7 +17,7 @@
 상태 기계가 **잡**이라면 상태는 **스텝**이다.   
 스텝은 아래 이미지와 같이 스텝과 스텝으로 연결되어 있을수 있으며 스텝은 **태스크릿**과 **청크** 라는 두가지 유형으로 나뉜다. (아래 예시 이미지는 청크 유형)
 
-![step](./step.png)
+![step](./image/step.png)
 
 
 
@@ -27,7 +27,7 @@
 단순히 Tasklet 인터페이스를 구현하기만 하면되고, 해당 인터페이스에는 execute 메서드만 존재하기 때문에 복잡하지 않다.    
 (특정한 조건으로 스텝을 중지하기 전까지 execute 메서드가 반복실행되며 해당 메서드가 호출될때마다 독립적인 트랜잭션을 갖는다.)
 
-![tasklet](./tasklet.png)
+![tasklet](./image/tasklet.png)
 
 
 
@@ -50,7 +50,7 @@
 
 잡 컴포넌트 및 관계를 간단히 살펴본다.
 
-![jobcomponent](./jobcomponent.png)
+![jobcomponent](./image/jobcomponent.png)
 
 JobRepository 는 배치 수행과 관련된 데이터들을 관계형 데이터베이스에 저장해두고 다른 컴포넌트들과 상호작용할 수 있다.
 
@@ -59,12 +59,12 @@ JobLauncher 는 잡을 실행시키는 역할을 하는 컴포넌트이고 잡�
 
 
 대충 디비와 엮어져 돌아가는 방식은 아래와 같다.   
-![simple_action](./simple_action.png)
+![simple_action](./image/simple_action.png)
 
 그럼 JobExecution, StepExecution 은 무엇인가?
 
 먼저 job 의 컨셉/구조를 조금씩 살펴보자.   
-![job_concept](./job_concept.png)
+![job_concept](./image/job_concept.png)
 
 **Job**은 여러개의 스텝을 구성할 수 있는 최상위 컨테이너이며, 잡의 이름과 스텝 구성 및 실행 순서 그리고 재실행 가능여부 등을 구성할 수 있다.
 
@@ -75,7 +75,7 @@ JobLauncher 는 잡을 실행시키는 역할을 하는 컴포넌트이고 잡�
 그럼 언제 새로운 잡인스턴스가 생성되는가? 
 JobParameter 가 변경되면 새로운 잡인스턴스가 생성된다.
 
-![jobparameter](./jobparameter.png)
+![jobparameter](./image/jobparameter.png)
 
 JobInstance = Job + JobParameter 라고 한다.
 
@@ -90,7 +90,7 @@ JobExecution 은 실패 또는 성공을 할 수 있다. 하지만, jobInstance 
 Step 은 실제 배치 처리를 조작 및 제어한다.  
 Job 에는 JobExecution 이 있는것처럼 Step 은 여러 StepExecution 을 가질 수 있다.
 
-![stepexecution](./stepexecution.png)
+![stepexecution](./image/stepexecution.png)
 
 StepExecution 은 JobExecution 과 연관되어 있으며, StepExecution 에는 실행 상태에 대한 모든 정보를 포함하고 있다. 
 (ExecutionContext 라는것이 있다고한다.)
