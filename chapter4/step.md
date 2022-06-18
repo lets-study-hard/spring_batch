@@ -211,7 +211,7 @@ public class BatchConfiguration {
 }
 ```
 
-![스크린샷 2022-06-18 오전 11.10.45.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/2ec790f6-ea85-454a-b7dd-f9af683e6bcf/스크린샷_2022-06-18_오전_11.10.45.png)
+![스크린샷 2022-06-18 오전 11.10.45.png](https://github.com/lets-study-hard/spring_batch/blob/main/chapter4/images/chunk.png)
 
 ### 청크 크기 구성
 
