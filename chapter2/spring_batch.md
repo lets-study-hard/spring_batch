@@ -1,10 +1,9 @@
 ## spring batch
-> 배치 아키텍처와 간단한 예제를 설명한다.
+> 배치 아키텍처와 간단한 예제를 설명합니다.
 
 1. [잡과 스텝](#-잡과-스텝)
 2. [잡 실행](#-잡-실행)
 3. [병렬화](#병렬화)
-4. [예제](#-예제)
 
 ---
 
@@ -15,9 +14,9 @@
 간단히 검색해보면 **각 상태(state)를 특정한 조건(event)에 따라서 연결되어 있는 다른 상태로 전이시키는 장치**라고 한다.   
 
 상태 기계가 **잡**이라면 상태는 **스텝**이다.   
-스텝은 아래 이미지와 같이 스텝과 스텝으로 연결되어 있을수 있으며 스텝은 **태스크릿**과 **청크** 라는 두가지 유형으로 나뉜다. (아래 예시 이미지는 청크 유형)
+스텝은 아래 이미지와 같이 스텝과 스텝으로 연결되어 있을수 있으며 스텝은 **태스크릿**과 **청크** 라는 두가지 처리방식을 지원한다. (아래 예시 이미지는 청크 유형 방식)
 
-![step](./image/step.png)
+![step2](./image/step2.png)
 
 
 
@@ -34,7 +33,11 @@
 #### 청크(chunk)
 
 청크 기반 스텝은 ItemReader, ItemProcessor, ItemWriter 라는 3개 부분으로 구성될 수 있으며 주로 아이템 기반 처리작업에 사용된다.   
-(자세한 내용은 책 공부하며 차차 진행..)
+
+- itemReader 는 itemProcessor/itemWriter 에서 사용할 아이템을 읽는 작업을 진행한다.
+- itemProcessor 는 실제 로직 구성과 관련된 작업을 진행
+- itemWriter 는 처리된 아이템들을 저장하는 작업을 진행
+
 
 #### 정리
 
@@ -98,12 +101,99 @@ StepExecution 은 JobExecution 과 연관되어 있으며, StepExecution 에는 
 
 ### 3. 병렬화
 
+배치 처리를 병렬화할 수 있는 방법으로 아래 5가지가 방법이 간단히 소개합니다.   
+
+- 다중스레드 스텝
+- 전체 스텝 병렬 실행
+- 비동기 itemProcessor,itemWriter
+- 원격 청킹
+- 파티셔닝
+
 #### 다중 스레드 스텝
+
+병렬화 중에 가장 간단한 방법으로 TaskExecutor 를 이용한 방법이다.   
+TaskExecutor 구현체들을 사용해서 스레드를 생성해서 itemReader, itemWriter 를 청크별로 다른 스레드에서 병렬로 실행하도록 한다.   
+(멀티스레드로 동작하기 때문에 사용하려는 itemReader, itemWriter 가 thread-safe 한지 확인이 필요하다.)
+
+![multithreadstep2](./image/multithreadstep2.png)
+
+위 이미지에 SimpleAsyncTaskExecutor 는 새로운 스레드가 계속 생성되는 구현체.   
+> 스로틀 제한은 해당 작업을 처리하는데 몇개의 스레드를 사용할 것인지 제한하도록 스프링 배치에서 제공하는 메소드. 기본값 4     
+> 보통 core pool size, max pool size, throttleLimit 은 똑같은 값으로 지정한다고 함.  
+>> core pool size 는 몇개의 스레드를 사용할건지, max pool size 는 최대 개수, 스로틀 제한은 코어풀개수와 상관없이 배치 작업에서는 스로틀 제한만큼만 스레드가 사용됨.
+
+![multithreadstep](./image/multithreadstep.png)
+
+위 예제코드에서는 청크가 10이므로 10개씩 다른 스레드에서 스텝이 실행됨.    
+
+![threadstep](./image/threadstep.png)
+
+
+
+공식문서에 나와 있는 내용이 아래 블로그에 그대로 설명되어 있고, 부가적인 설명도 있음. (시간될때 한번 읽어보시면 좋을듯)   
+공식문서 - https://docs.spring.io/spring-batch/docs/current/reference/html/scalability.html#multithreadedStep.  
+블로그 - https://jojoldu.tistory.com/493
+
 
 #### 병렬 스텝
 
+병렬 스텝은 스텝 자체를 병렬로 실행하는 방법. (다중 스레드 스텝은 스텝내의 아이템 처리를 병렬로 처리하는게 다름.)    
+step2 과 step3 가 서로 기다릴 필요없는 작업인 경우에 사용한다.
+
+![parallelstep](./image/parallelstep.png)
+
+간단히 사용법을 보면, split() 메소드를 사용해서 TaskExecutor 를 이용함.   
+flow1(), flow2() 이 병렬로 실행됨.  
+(step1, step2) 를 (step3) 과 병렬로 실행
+
+![parallelstep2](./image/parallelstep2.png)
+
+아래는 다른 예제.
+flow1과 flow2 가 병렬로 실행됨.
+
+![parallelstep3](./image/parallelstep3.png)
+
+
+#### 비동기 itemProcessor,itemWriter
+
+기본 개념은 데이터를 읽거나 조회하는 itemReader 는 순차적으로 실행되며(동기), 읽어온 데이터를 처리하는 processor, writer 는 비동기로 실행된다.
+(itemReader 는 아이템을 읽어서 작업이 끝날때까지 기다리지 않고 그냥 던지고 다시 아이템을 읽음.)
+
+아래 예시코드와 같이 AsyncItemProcessor, AsyncItemWriter 를 사용해서 구현하며 해당 클래스를 사용하려면
+spring-batch-integration 의존성이 필요하다.
+
+![asyncitem3](./image/asyncitem3.png)
+
+asyncItemProcessor 는 결과값을 바로 주지 않고 Future 를 반환하면 itemWriter 에서는 future 에 반환된 값을 이용해 데이터를 처리한다.
+
+
 #### 원격 청킹
+
+원격청킹 방식은 itemReader 에 비해 아이템을 처리하는 processor/writer 의 비용이 훨씬 큰 경우에 적합하다.
+(그리고 네트워크 i/o 비용이 적은 시나리오에 적합.)
+
+기본 개념.
+itemReader 를 실행하는 서버와 itemProcessor 혹은 itemWriter 를 실행하는 서버가 다른 서버에 위치한다.
+아이템을 읽는 itemReader 는 마스터노드가 되고 읽은 아이템을 메시지큐와 같은 메시지 브로커를 이용해 워커노드에게 처리하도록 한다.
+
+대략 아래그림으로 보면
+
+ - 매니저 스텝(단일 프로세스/스레드)에서는 item 을 읽어서 메시지 브로커에 전송(produce)
+ - 메시지를 받은 리스너(여러 리모트 서버들)에서 item 을 받아와서(comsume) 처리 (db 까지 저장)
+ - 완료사항 전달 및 처리
+
+![remote](./image/remote.png)
+
+코드 예시는 공식문서 참고.   
+https://docs.spring.io/spring-batch/docs/current/reference/html/spring-batch-integration.html#remote-chunking
+
 
 #### 파티셔닝
 
-### 4. 예제
+![partition](./image/partition.png)
+
+파티셔닝은 마스터 스텝, 워커 스텝이 별도로 존재하는 구조.   
+마스터 스텝은 단지 워커 스텝을 얼만큼 파티션으로 나눌지 결정하고(PartitionStep) 파티셔닝된 워커스텝(Tasklet, Flow)들은 병렬로 작업을 처리한다.
+
+원격청킹과는 달리 파티셔닝의 워커스텝은 itemReader, itemProcessor, itemWriter 를 모두 가지고 동작하며, 
+병렬로 실행된 워커스텝이 모두 종료되는 경우 마스터 스텝도 완료된것으로 간주한다.
