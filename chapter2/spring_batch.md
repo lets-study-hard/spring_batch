@@ -112,18 +112,21 @@ StepExecution 은 JobExecution 과 연관되어 있으며, StepExecution 에는 
 #### 다중 스레드 스텝
 
 병렬화 중에 가장 간단한 방법으로 TaskExecutor 를 이용한 방법이다.   
-TaskExecutor 구현체들을 사용해서 스레드를 생성해서 itemReader, itemWriter 를 청크별로 다른 스레드에서 병렬로 실행하도록 한다.   
-(멀티스레드로 동작하기 때문에 사용하려는 itemReader, itemWriter 가 thread-safe 한지 확인이 필요하다.)
+TaskExecutor 구현체들을 사용해서 스레드를 생성해서 itemReader, itemWriter 를 **청크별로 다른 스레드에서 병렬로 실행**하도록 한다.   
+
+**주의!** 
+멀티스레드로 동작하기 때문에 사용하려는 itemReader, itemWriter 클래스가 thread-safe 한 클래스인지 확인이 필요하다.)
 
 ![multithreadstep2](./image/multithreadstep2.png)
 
 위 이미지에 SimpleAsyncTaskExecutor 는 새로운 스레드가 계속 생성되는 구현체.   
-> 스로틀 제한은 해당 작업을 처리하는데 몇개의 스레드를 사용할 것인지 제한하도록 스프링 배치에서 제공하는 메소드. 기본값 4     
-> 보통 core pool size, max pool size, throttleLimit 은 똑같은 값으로 지정한다고 함.  
->> core pool size 는 몇개의 스레드를 사용할건지, max pool size 는 최대 개수, 스로틀 제한은 코어풀개수와 상관없이 배치 작업에서는 스로틀 제한만큼만 스레드가 사용됨.
 
 ![multithreadstep](./image/multithreadstep.png)
 
+> 스로틀 제한은 해당 작업을 처리하는데 몇개의 스레드를 사용할 것인지 제한하도록 스프링 배치에서 제공하는 메소드. 기본값 4     
+> 보통 core pool size, max pool size, throttleLimit 은 똑같은 값으로 지정한다고 함.  
+>> core pool size 는 몇개의 스레드를 사용할건지, max pool size 는 최대 개수, 스로틀 제한은 코어풀개수와 상관없이 배치 작업에서는 스로틀 제한만큼만 스레드가 사용됨.
+>> 
 위 예제코드에서는 청크가 10이므로 10개씩 다른 스레드에서 스텝이 실행됨.    
 
 ![threadstep](./image/threadstep.png)
