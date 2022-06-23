@@ -29,7 +29,7 @@ OnPropertyCondition 클래스에서 결정하는 로직이 존재함.
 간단히 job execute 되는 부분까지 따라가봄.
 
 <details>
-<summary>>> **job executer 까지.. 펼쳐보기**</summary>
+<summary> [펼쳐보기] job executer 까지 따라가보기 </summary>
 <div markdown="1">
 
 ![3](./image/3.png)
