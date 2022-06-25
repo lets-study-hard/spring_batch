@@ -20,7 +20,7 @@
 - JobRepository Interface
 - JobRepository 인터페이스를 구현해 데이터를 저장하는 데 사용되는 저장소
 
-![meta-data-erd.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/7160cb87-83c3-4500-8b0f-8ad74ae97eeb/meta-data-erd.png)
+![meta-data-erd.png](https://github.com/lets-study-hard/spring_batch/blob/main/chapter5/images/meta-data-erd.png)
 
 - 6개의 테이블이 존재
 - 스키마의 시작점은 BATCH_JOB_INSTANCE
