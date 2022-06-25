@@ -13,9 +13,9 @@
 
 |chapter|page|assign|
 |---|---|---|
-|[chapter5]()|all|gamzagamza|
-|[chapter6]()|~220 (잡 중지하기 전까지) |mkh9293|
-|[chapter6]()|~242 (잡 중지하기 부터 재시작 제어하기 전까지) |eunsolJo|
+|[chapter5](https://github.com/lets-study-hard/spring_batch/blob/main/chapter5/jobRepositoryAndMetadata.md)|all|gamzagamza|
+|[chapter6](https://github.com/lets-study-hard/spring_batch/blob/main/chapter6/~JobStop.md)|~220 (잡 중지하기 전까지) |mkh9293|
+|[chapter6](https://github.com/lets-study-hard/spring_batch/blob/main/chapter6/~restartingControll.md)|~242 (잡 중지하기 부터 재시작 제어하기 전까지) |eunsolJo|
 |[chapter6]()|~247 (재시작 제어하기 부터 전체) |all|
 
 
