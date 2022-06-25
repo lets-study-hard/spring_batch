@@ -23,7 +23,7 @@
 
 |chapter|page|assign|
 |---|---|---|
-|[chapter7]()|~270 (~ 여러가지 레코드 포맷 전까지)|mkh9293|
+|[chapter7]()|~270 (여러가지 레코드 포맷 전까지)|mkh9293|
 |[chapter7]()|~303 (여러가지 레코드 포맷 ~ 데이터베이스전까지) |eunsolJo|
 |[chapter7]()|~334 (데이터베이스 입력) |gamzagamza|
 |[chapter7]()|~353 (기존서비스 ~ 마지막까지) |all|
