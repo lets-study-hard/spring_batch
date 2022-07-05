@@ -1,1 +1,296 @@
-7-1 
+## ItemReader
+
+청크기반 스텝의 구성요소로 ItemReader, ItemProcessor, ItemWriter 가 있다.   
+스프링 배치에서는 ItemReader 인터페이스를 이용하여 플랫파일, xml, 데이터베이스 등의 외부 데이터를 읽어서 처리할 수 있도록 한다.
+
+ex. org.springframework.batch.item 하위에 존재하는 패키지들.. (플랫파일은 file 패키지에 존재)
+
+![1](./image/1.png)
+
+
+ItemReader 의 인터페이스
+```java
+package org.springframework.batch.item;
+
+import org.springframework.lang.Nullable;
+
+public interface ItemReader<T> {
+    @Nullable
+    T read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException;
+}
+```
+
+> step -> read 메서드 호출 -> step 이 처리할 아이템 한개 반환 -> step 은 청크 내 데이터가 몇개 처리 되었는지 관리
+>
+
+---
+
+### 플랫 파일
+
+플랫파일은 xml 등과 같은 파일과는 다르게 파일의 포맷이나 의미가 별도로 존재하지 않는다.
+
+
+다음으로 FlatFileItemReader 클래스를 이용해 플랫파일의 데이터를 읽어오는 몇가지 방법을 살펴본다.
+
+- 고정 너비 파일
+- 필드가 구분자로 구분된 파일
+- 커스텀 레코드 파싱
+
+#### 고정 너비 파일
+
+고정 너비 파일은 파일의 구분자가 없는 대신 데이터간의 너비 간격을 통해 구분한다.
+
+![2](./image/2.png)
+> 원본 파일 위치.  
+> https://github.com/Apress/def-guide-spring-batch/blob/master/Chapter07/src/main/resources/input/customerFixedWidth.txt
+> 
+
+위 데이터를 처리하기 위한 job, step, itemwriter, domain 클래스는 아래와 같다.   
+지금까지 살펴본 구조에서 특별한것 없이 간단하다.
+
+job
+```java
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("fixedWidthJob")
+                .start(copyFileStep())
+                .build();
+    }
+```
+
+step
+```java
+    @Bean
+    public Step copyFileStep() {
+        return this.stepBuilderFactory.get("copyFileStep")
+                .<Customer, Customer>chunk(10)
+                .reader(customerItemReader(null))
+                .writer(itemWriter())
+                .build();
+    }
+```
+
+item writer
+```java
+    @Bean
+    public ItemWriter<Customer> itemWriter() {
+        return (items) -> items.forEach(System.out::println);
+    }
+```
+
+domain
+```java
+public class Customer {
+    private String firstName;
+    private String middleInitial;
+    private String lastName;
+    private String addressNumber;
+    private String street;
+    private String city;
+    private String state;
+    private String zipCode;
+ ...
+```
+
+
+
+아래에 살펴볼 코드가 아이템을 읽는 실질적인 코드이다.   
+customerItemReader() 메소드
+
+```java
+    @Bean
+    @StepScope // jobParameters 를 사용하는 경우 StepScope 정의가 필요하다. 
+    public FlatFileItemReader<Customer> customerItemReader(
+            @Value("#{jobParameters['customerFile']}") Resource inputFile
+    ) {
+
+        return new FlatFileItemReaderBuilder<Customer>()
+                .name("customerItemReader")
+                .resource(inputFile)
+                .fixedLength()
+                .columns(new Range[]{
+                        new Range(1,11), new Range(12, 12), new Range(13, 22),
+						new Range(23, 26), new Range(27,46), new Range(47,62), new Range(63,64),
+						new Range(65,69)
+                })
+                .names("firstName", "middleInitial", "lastName", "addressNumber", "street", "city", "state","zipCode")
+                .targetType(Customer.class)
+                .build();
+    }
+```
+
+대충 코드들을 보면 어떻게 동작하는지 추측 가능하고 어렵지 않게 이해할 수 있다.   
+jobParamters 로 실제 읽어들일 파일을 받아와서 columns 와 names 를 통해 매핑한 결과를 Customer 도메인 객체로 만들고, 그 결과를 itemWriter 로 보낸다..
+
+책에서는 클래스이름과 함께 이론적인 설명들이 써있어서 관련 내용과 함께 위 코드를 보고 생긴 의문에 대해서도 살펴보자.
+
+1. @StepScope 는 왜 추가하였는가?
+2. 실제 파일을 inputFile 파라미터로 어떻게 받아오는가?
+3. name 은 왜 필요한가?
+4. fixedLegth() 메소드는 중간에 무슨 역할을 하는가?
+5. targetType() 메소드는 무슨 역할을 하는가?
+6. 위 결과로 읽어낸 데이터를 어떻게 itemWriter 에서 사용하는가?
+
+> columns(), names() 메소드는 그냥 add 하는거 밖에 없어서 뺌.
+
+##### 1. @StepScope 는 왜 추가하였는가?
+
+4장의 설명에서 이미 나왔는데 기억을 못했었음.. 다시 읽어보니 jobParameters 를 사용하려면 늦은 바인딩을 이용해야 한다고 한다.
+
+그리고 저번주에 처음 앱 기동 시점에 beanFactory 에 @Bean 이 붙어있는 메소드들을 찾아다가 한번씩 모두 get 하는것을 확인했었다. 
+
+AbstractBeanFactory 클래스에 doGetBean() 메소드에 아래와 같은 코드가 있음.
+```java
+if (mbd.isSingleton()) {
+                    sharedInstance = this.getSingleton(beanName, () -> {
+                        try {
+                            return this.createBean(beanName, mbd, args);
+                        } catch (BeansException var5) {
+                            this.destroySingleton(beanName);
+                            throw var5;
+                        }
+                    });
+                    beanInstance = this.getObjectForBeanInstance(sharedInstance, name, beanName, mbd);
+                }
+```
+
+this.createBean() 메소드에서 빈과 파라미터를 매핑하는 관련 코드가 있는데 엄청 복잡...
+
+빈을 한번씩 호출하는 시점에는 jobParameters 파라미터가 없으니 당연히 에러가 나는것이다.   
+> ...Unsatisfied dependency expressed through method 'customerItemReader' parameter 0;...
+> 
+
+저번주 책을 보면(6장 잡실행하기) 잡이 실행되는 시점에 (SpringApplication 의 callRuners) 로 잡 파라미터 세팅 등이 완료되어야 하는데 그전에 get bean 을 해버리니 에러가 날 수 밖에 없다.
+
+그럼 @StepScope 를 추가하면 어떻게 빈 등록 시점에 호출되지 않는건가?
+
+@StepScope 를 보면 아래와 같다.
+
+```java
+@Scope(
+    value = "step",
+    proxyMode = ScopedProxyMode.TARGET_CLASS
+)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface StepScope {
+}
+```
+
+@Scope 어노테이션이 의심된다. 뭘까
+
+Scope 는 우리가 사용하려는 빈을 등록하는 시점과 제거하는 시점과 같이 유효한 시점을 정의할때 사용한다.   
+어떤 블로그에 해석해논 표가 있어서 들고옴..
+
+![3](./image/3.png)
+
+> 원본 문서 https://docs.spring.io/spring-framework/docs/4.2.5.RELEASE/spring-framework-reference/html/beans.html#beans-factory-scopes. 
+> 
+
+기본적으로 모든 bean 은 singleton 으로 생성된다. (즉, 앱 구동 시점에 빈이 정의된다.)
+
+그럼 위에 StepScope 가 무엇인지 예측해볼 수 있다.    
+해당 scope 은 배치쪽에서 제공하는 scope 으로 어노테이션이 추가된 step 이 실행되는 시점에 인스턴스가 생성되고 (빈 생성) step 이 끝나면 제거된다.
+
+이 시점에는 이미 잡 파라미터 세팅 등.. 잡 구동에 필요한 환경 준비가 완료되므로 문제없이 실행된다.
+
+##### 2. 실제 파일을 inputFile 파라미터로 어떻게 받아오는가?
+
+> 결과적으로 FlatFileItemReaderBuilder 클래스 내부에 FlatFileItemReader 에서 한줄씩 읽고 있으나 조금 따라가보면...
+
+SpringApplication 의 callRunner 메소드가 실행되고 나면 JobLauncherApplicationRunner 클래스의 run() 메소드가 실행된다.
+
+args 로 부터 jobArguments 변수를 할당하고 run 메소드의 파라미터로 세팅한다.
+
+![4](./image/4.png)
+
+jobParameters 변수에 세팅한다.   
+이때까지는 아직 우리가 예전부터 봐왔던 jobParametersBuilder 에 key, value 로 파라미터 세팅하는것과 똑같음.   
+JobParametersBuilder propertiesBuilder = new JobParametersBuilder(); 했던거...
+![5](./image/5.png)
+![6](./image/6.png)
+
+그 후 job.execute() 메서드가 호출되면서 잡런처가 run 하게 되면, 아까 위에서 봤었던 scope 관련...
+빈이 생성되는 로직이 실행된다..
+
+![7](./image/7.png)
+
+AbstractBeanFactory 클래스의 mbd 는 beanName 으로 bean 정보를 가져온것이고, (mergedLocalBeanDefinition() 메소드 결과임).  
+mbd 정보 로부터 해당 빈이 singleton, prototype 인지 체크하는 부분 건너뛰고 else 문에서 로직이 실행되는것을 볼 수 있다.
+
+![8](./image/8.png)
+![9](./image/9.png)
+
+빈 생성하는 로직을 확인할 수 있다.
+
+![10](./image/10.png)
+
+빈 생성 완료 후.. step 내 FlatFileItemReaderBuilder 클래스가 실행되면서 doOpen() 메소드가 실행되고,
+
+![11](./image/11.png)
+
+DefaultBufferedReaderFactory 클래스에서는 우리가 읽을 resource 를 byte 단위로 파일을 읽어오도록 한다.    
+위 코드 다시보면 this.reader 에 할당되는것을 볼 수 있는데 이제 read() 메서드가 호출될때마다 저 this.reader 를 사용하게 된다.
+
+![12](./image/12.png)
+
+##### 3. name 은 왜 필요한가?
+
+name 필드는 saveState 필드 때문에 필요하다고 한다.   
+예전에 살펴봤듯이 saveState 는 아이템 읽기 실패 시 실패한 지점부터 다시 데이터를 읽을 수 있도록 제공하는 필드였다.
+
+batch_step_execution_context 테이블에 reader 의 상태를 저장하기 위한 접두어로 사용된다고 한다.  
+![15](./image/15.png)
+
+> default 값은 true   
+> 병렬 실행 시 해당 값은 false 로 하는게 좋다는것을 살펴 봤었다.   
+> 1번째 스레드에서는 1~3번까지 데이터를 읽다가 2번에서 실패함. 그런데 2번째 스레드에서는 4~7번을 정상적으로 읽었다면 saveState=true 에 의해서 7번까지 정상적으로 데이터를 읽었다고 판단한다고 한다. 
+
+만약 saveState 를 사용하지 않는다면 굳이 name 이 필요없다고 한다.
+
+name 필드를 주석 처리하고 실행해보면, saveState 필드가 true 이니 name 필드가 필요하다고 나온다.
+
+![13](./image/13.png)
+![14](./image/14.png)
+
+그럼 saveState 를 false 로 바꾸고 실행하면 batch_step_execution_context 테이블에 데이터가 저장되지 않는건가?
+
+아래 처럼 false 로 설정하고 실행하니, 데이터도 정상적으로 읽어오고 있고 해당 테이블에 데이터는 생성되지만 데이터내에 
+reader 의 상태 저장에 사용되는듯한 데이터가 보이지 않는다.
+
+> {"@class":"java.util.HashMap","batch.taskletType":"org.springframework.batch.core.step.item.ChunkOrientedTasklet","batch.stepType":"org.springframework.batch.core.step.tasklet.TaskletStep"}
+
+![16](./image/16.png)
+
+그럼 saveState 가 true 일때 어떻게 executionContext 로 마지막에 읽은 부분을 체크하고 재실행하는가?
+
+먼저 성공했을때 {name}.read.count: 1000 개이다.   
+![17](./image/17.png)
+
+batch_job_execution 도 실패로 바꾸고,   
+batch_step_execution 테이블에 status: failed, commit_count:0, read_count:5, write_count:5 등등 바꾸고
+batch_step_execution_context 테이블에 해당 값을 임의로 5로 바꾸면 5번째 부터 읽는지 확인해보자.  
+![21](./image/21.png)
+![18](./image/18.png) 
+![19](./image/19.png) 
+
+아래 데이터중에 예상대로라면 5번째인 "Stuart" 부터 읽어야 한다.
+
+![20](./image/20.png)
+
+아래 콘솔을 보면 5번째(Stuart) 부터 읽는것을 확인할 수 있다.
+
+![22](./image/22.png)
+
+그럼 saveState 필드는 정확히 어떤 테이블에, 어떤 데이터를 읽어가는건가?
+batch_step_execution 필드에 commit_count, write_count 도 있고,
+batch_step_execution_context 필드에 데이터중에 {name}.read.count 가 있었다.
+
+결론 먼저 얘기하면 batch_step_execution_context 필드에 read.count 로 읽어온다.
+
+![23](./image/23.png)
+
+책의 예제로 사용한 FlatFileItemReader 클래스는 AbstractItemCountingItemStreamItemReader 클래스를 상속받아서 사용하고 있는데, 해당 클래스의 open() 메소드에서 처리하고 있다.
+> saveState 필드도 해당 클래스에서 true 로 세팅되어 있음.
+
+![24](./image/24.png)
