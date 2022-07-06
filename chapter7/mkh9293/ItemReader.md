@@ -294,3 +294,126 @@ batch_step_execution_context 필드에 데이터중에 {name}.read.count 가 있
 > saveState 필드도 해당 클래스에서 true 로 세팅되어 있음.
 
 ![24](./image/24.png)
+
+#### 4. fixedLegth() 메소드는 중간에 무슨 역할을 하는가?
+
+```java
+return new FlatFileItemReaderBuilder<Customer>()
+                .name("customerItemReader123")
+                .resource(inputFile)
+                .fixedLength() 
+                .columns(new Range[]{
+                        new Range(1,11), new Range(12, 12), new Range(13, 22),
+                        new Range(23, 26), new Range(27,46), new Range(47,62), new Range(63,64),
+                        new Range(65,69)
+                })
+                .names("firstName", "middleInitial", "lastName", "addressNumber", "street", "city", "state","zipCode")
+                .targetType(Customer.class)
+                .build();
+```
+
+fixedLength() 빌더 메소드를 추가하면 FlatFileItemReaderBuilder 클래스에서 
+fixedLengthBuilder 클래스를 리턴한다.
+
+```java
+public FlatFileItemReaderBuilder.FixedLengthBuilder<T> fixedLength() {
+        this.fixedLengthBuilder = new FlatFileItemReaderBuilder.FixedLengthBuilder(this);
+        this.updateTokenizerValidation(this.fixedLengthBuilder, 2);
+        return this.fixedLengthBuilder;
+    }
+```
+
+해당 클래스는 itemeader build() 시에 사용된다.
+
+![25](./image/25.png)
+
+DefaultLineMapper() 클래스에 setLineTokenizer() 메소드 호출 시 해당 클래스의 빌드한 결과를 할당하고 있다.
+
+참고로 DefaultLineMapper() 클래스는 LineTokenizer, FieldSetMapper 변수를 가지고 있고! this.fixedLengthBuilder.build() 를 들어가보면.  
+names(), ranges() 를 tokenizer 에 세팅하는걸 볼 수 있다.   
+해당 토크나이저는 추후 FlatFileItemReader 에서 read 할때 사용된다.
+
+![30](./image/30.png)
+![26](./image/26.png)
+
+무슨 역할을 할까?
+
+FlatFileItemReaderBuilder 클래스를 build() 하는 메소드 내부에는 FlatFileItemReader 를 세팅해서 리턴하는 부분이 존재한다.
+
+![27](./image/27.png)
+
+FlatFileItemReader 클래스의 doOpen() 메소드가 호출되면 파라미터로 전달받은 리소스를 읽을수 있도록 bufferedReader 클래스를 이용한다.
+
+![28](./image/28.png)
+
+그 후에 위에서 살펴본 마지막까지 실행된 read.count 가 있는지 체크하고,    
+FlatFileItemReader 클래스의 doRead() 메소드가 호출되는데,   
+이때 보이는 this.lineMapper 가 위에서 살펴봤던 DefaultLineMapper 이다.
+
+![29](./image/29.png)
+
+this.fieldSetMapper, this.tokenizer 를 보면 아까 세팅한 값이 존재하는걸 확인할 수 있다.   
+코드 더 들어가서 실제 자르는 부분은 생략함.
+
+![31](./image/31.png)
+
+
+##### 5. targetType() 메소드는 무슨 역할을 하는가?
+
+예상하다시피 읽어온 데이터를 Customer 객체로 변환하는 역할을 한다.
+대충 살펴보면 FlatFileItemReaderBuilder 클래스에 build() 내용중에 BeanWrapperFieldSetMapper 클래스에 setType() 하는 부분이 있다.
+
+![32](./image/32.png)
+
+그리고 FlatFileItemReader 에서 item 들을 read 할때 (DefaultLineMapper 클래스를 사용한다고 했었다.)
+
+![33](./image/33.png)
+
+
+DefaultLineMapper 클래스에 mapLine() 이 호출되는데 해당 메소드내에서는 또 BeanWrapperFieldSetMapper 클래스의 mapFieldSet() 메소드를 호출한다.
+
+![34](./image/34.png)
+![35](./image/35.png)
+
+getBean() 메소드에서 할단된 type 을 인스턴스로 만들어서 리턴하고.   
+아래 부분의 코드내에서 읽어온 데이터를 Customer 클래스에 바인딩 처리를 진행한다.
+
+##### 6. 위 결과로 읽어낸 데이터를 어떻게 itemWriter 에서 사용하는가?
+
+step 을 설정하는 코드를 보면 chunk() 빌더 메소드를 호출한다.   
+해당 빌더 메소드를 사용하는 경우 빌더 클래스에서는 SimpleStepBuilder 클래스를 사용하도록 리턴한다.  
+
+![37](./image/37.png)
+
+SimpleStepBuilder 클래스가 상속중인 AbstractTaskletStepBuilder 클래스가 있는데 해당 클래스 내부에
+.build() 메소드가 존재한다.
+
+![36](./image/36.png)
+
+메소드 내부에 tasklet 을 세팅하는 부분이 존재하는데, createTasklet() 메소드를 보면
+chunkProvider, chunkProcessor 변수를 생성하고 ChunkOrientedTasklet() 클래스를 생성한다.   
+(변수 생성 시 step 빌더에서 전달된 getReader(), getProcessor(), getWriter() 를 같이 사용하는것을 볼 수 있다.)
+
+![38](./image/38.png)
+
+대충.. 위와 같은 과정을 거쳐서 생성된 배치 컴포넌트들은 다시 job의 build(), job 의 run() 을 거쳐서...   
+AbstractStep 클래스의 this.open(), this.doExecute() 를 호출하게 된다.
+
+![39](./image/39.png)
+
+this.open() 호출로 인해 FlatFileItemReader 클래스의 doOpen() 메소드가 실행되고, 파일로 받아온 리소스를 this.reader 변수에 할당한다.
+> this.reader 는 우리가 itemReader 로써 계속 읽을 데이터다.
+
+this.doExecute() 메소드가 호출되므로써 reader 에서 아이템이 읽어지고, writer 에서 아이템이 쓰여지기 위한 메서드들이 호출된다.
+
+![41](./image/41.png)
+![40](./image/40.png)
+
+잘 안보이는데.. AbstractStep 클래스의 doExecute() 메소드가 호출되면 TaskletStep 클래스의 doExecute() 가 호출된다.   (위코드는 TaskletStep 의 doExecute() 메소드다)    
+TransactionTemplate 클래스의 execute() 메서드가 실행되고, 
+메소드를 쭉.. 따라가다보면 위에서 생성했던 ChunkOriendtedTasklet 클래스를 다시 보게 된다.
+
+![42](./image/42.png)
+
+조금 위에서 chunkProvider 는 getReader() 를 할당했었고, chunkProcessor 는 getWriter() 를 할당했었다.   
+예상대로 해당 코드의 provide(), process() 가 예상하는대로 read(), write() 하는 역할을 한다.
