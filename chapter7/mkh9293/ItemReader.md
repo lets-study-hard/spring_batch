@@ -160,7 +160,7 @@ this.createBean() 메소드에서 빈과 파라미터를 매핑하는 관련 코
 > ...Unsatisfied dependency expressed through method 'customerItemReader' parameter 0;...
 > 
 
-저번주 책을 보면(6장 잡실행하기) 잡이 실행되는 시점에 (SpringApplication 의 callRuners) 로 잡 파라미터 세팅 등이 완료되어야 하는데 그전에 get bean 을 해버리니 에러가 날 수 밖에 없다.
+저번주 책을 보면(6장 잡실행하기) 잡이 실행되는 시점에 (SpringApplication 의 callRuners) 로 잡 파라미터 세팅 등이 먼저 완료되어야 하는데 그전에 앱 구동 시점에 get bean 을 해버리니 에러가 날 수 밖에 없다.
 
 그럼 @StepScope 를 추가하면 어떻게 빈 등록 시점에 호출되지 않는건가?
 
@@ -187,12 +187,12 @@ Scope 는 우리가 사용하려는 빈을 등록하는 시점과 제거하는 �
 > 원본 문서 https://docs.spring.io/spring-framework/docs/4.2.5.RELEASE/spring-framework-reference/html/beans.html#beans-factory-scopes. 
 > 
 
-기본적으로 모든 bean 은 singleton 으로 생성된다. (즉, 앱 구동 시점에 빈이 정의된다.)
+기본적으로 모든 bean 은 singleton 으로 생성된다. (즉, 앱 구동 시점에 빈 하나만 정의되서 사용된다.)
 
 그럼 위에 StepScope 가 무엇인지 예측해볼 수 있다.    
-해당 scope 은 배치쪽에서 제공하는 scope 으로 어노테이션이 추가된 step 이 실행되는 시점에 인스턴스가 생성되고 (빈 생성) step 이 끝나면 제거된다.
+해당 "step" scope 은 배치쪽에서 제공하는 scope 으로 @StepScope 어노테이션이 붙어있는 step 이 실행되는 시점에 인스턴스가 생성되고 (빈 생성) step 이 끝나면 빈이 제거된다.
 
-이 시점에는 이미 잡 파라미터 세팅 등.. 잡 구동에 필요한 환경 준비가 완료되므로 문제없이 실행된다.
+해당 step 빈이 실행되는 시점에는 이미 잡 파라미터 세팅 등, 잡 구동에 필요한 환경 준비(jobParameters..)가 완료되므로 문제없이 실행된다.
 
 ##### 2. 실제 파일을 inputFile 파라미터로 어떻게 받아오는가?
 
@@ -210,13 +210,16 @@ JobParametersBuilder propertiesBuilder = new JobParametersBuilder(); 했던거..
 ![5](./image/5.png)
 ![6](./image/6.png)
 
+JobParameters 에는 LinkedHashMap 으로 아래 2가지 값이 담겨서 사용된다.
+![49](./image/49.png)
+
 그 후 job.execute() 메서드가 호출되면서 잡런처가 run 하게 되면, 아까 위에서 봤었던 scope 관련...
 빈이 생성되는 로직이 실행된다..
 
 ![7](./image/7.png)
 
 AbstractBeanFactory 클래스의 mbd 는 beanName 으로 bean 정보를 가져온것이고, (mergedLocalBeanDefinition() 메소드 결과임).  
-mbd 정보 로부터 해당 빈이 singleton, prototype 인지 체크하는 부분 건너뛰고 else 문에서 로직이 실행되는것을 볼 수 있다.
+mbd 정보 로부터 해당 빈이 singleton, prototype 인지 체크하는 부분 건너뛰고 else 문에서 로직이 실행되는것을 볼 수 있다. ("step" 이기 때문..)
 
 ![8](./image/8.png)
 ![9](./image/9.png)
@@ -225,7 +228,8 @@ mbd 정보 로부터 해당 빈이 singleton, prototype 인지 체크하는 부�
 
 ![10](./image/10.png)
 
-빈 생성 완료 후.. step 내 FlatFileItemReaderBuilder 클래스가 실행되면서 doOpen() 메소드가 실행되고,
+빈 생성 완료 후.. step 내 FlatFileItemReaderBuilder 클래스가 실행되면서 doOpen() 메소드가 실행되고,   
+(this.resource 는 item reader build() 시점에 할당됨)
 
 ![11](./image/11.png)
 
@@ -244,7 +248,7 @@ batch_step_execution_context 테이블에 reader 의 상태를 저장하기 위�
 
 > default 값은 true   
 > 병렬 실행 시 해당 값은 false 로 하는게 좋다는것을 살펴 봤었다.   
-> 1번째 스레드에서는 1~3번까지 데이터를 읽다가 2번에서 실패함. 그런데 2번째 스레드에서는 4~7번을 정상적으로 읽었다면 saveState=true 에 의해서 7번까지 정상적으로 데이터를 읽었다고 판단한다고 한다. 
+> 1번째 스레드에서는 1~3번까지 데이터를 읽다가 2번에서 실패함. 그런데 동시에 2번째 스레드에서는 4~7번을 정상적으로 읽었다면 saveState=true 에 의해서 7번까지 정상적으로 데이터를 읽었다고 판단한다고 한다. 
 
 만약 saveState 를 사용하지 않는다면 굳이 name 이 필요없다고 한다.
 
@@ -293,6 +297,8 @@ batch_step_execution_context 필드에 데이터중에 {name}.read.count 가 있
 책의 예제로 사용한 FlatFileItemReader 클래스는 AbstractItemCountingItemStreamItemReader 클래스를 상속받아서 사용하고 있는데, 해당 클래스의 open() 메소드에서 처리하고 있다.
 > saveState 필드도 해당 클래스에서 true 로 세팅되어 있음.
 
+![50](./image/50.png)
+
 ![24](./image/24.png)
 
 ##### 4. fixedLegth() 메소드는 중간에 무슨 역할을 하는가?
@@ -313,7 +319,7 @@ return new FlatFileItemReaderBuilder<Customer>()
 ```
 
 fixedLength() 빌더 메소드를 추가하면 FlatFileItemReaderBuilder 클래스에서 
-fixedLengthBuilder 클래스를 리턴한다.
+fixedLengthBuilder 클래스 인스턴스를 생성해서 리턴한다.
 
 ```java
 public FlatFileItemReaderBuilder.FixedLengthBuilder<T> fixedLength() {
@@ -329,12 +335,17 @@ public FlatFileItemReaderBuilder.FixedLengthBuilder<T> fixedLength() {
 
 DefaultLineMapper() 클래스에 setLineTokenizer() 메소드 호출 시 해당 클래스의 빌드한 결과를 할당하고 있다.
 
-참고로 DefaultLineMapper() 클래스는 LineTokenizer, FieldSetMapper 변수를 가지고 있고! this.fixedLengthBuilder.build() 를 들어가보면.  
-names(), ranges() 를 tokenizer 에 세팅하는걸 볼 수 있다.   
+참고로 DefaultLineMapper() 클래스는 LineTokenizer, FieldSetMapper 변수를 가지고 있고 
+
+![26](./image/26.png)
+
+this.fixedLengthBuilder.build() 를 들어가보면
+names(), columns() 를 tokenizer 에 세팅하는걸 볼 수 있다.   
 해당 토크나이저는 추후 FlatFileItemReader 에서 read 할때 사용된다.
+(read 할때 resource 파일 내용을 tokenize 할때 사용함.)
 
 ![30](./image/30.png)
-![26](./image/26.png)
+
 
 무슨 역할을 할까?
 
@@ -358,10 +369,17 @@ this.fieldSetMapper, this.tokenizer 를 보면 아까 세팅한 값이 존재하
 ![31](./image/31.png)
 
 
+FixedLengthTokenizer 클래스의 tokenize() 메소드에서   
+ranges 를 가지고 와서 start 부터 end 까지 자름.   
+아래 메소드의 바깥쪽에서 names 를 가지고 매핑하는 코드도 존재하지만 생략..
+
+![51](./image/51.png)
+
+
 ##### 5. targetType() 메소드는 무슨 역할을 하는가?
 
 예상하다시피 읽어온 데이터를 Customer 객체로 변환하는 역할을 한다.
-대충 살펴보면 FlatFileItemReaderBuilder 클래스에 build() 내용중에 BeanWrapperFieldSetMapper 클래스에 setType() 하는 부분이 있다.
+대충 살펴보면 FlatFileItemReaderBuilder 클래스에 build() 내용중에 BeanWrapperFieldSetMapper 클래스에 setTargetType() 하는 부분이 있다.
 
 ![32](./image/32.png)
 
@@ -375,8 +393,9 @@ DefaultLineMapper 클래스에 mapLine() 이 호출되는데 해당 메소드내
 ![34](./image/34.png)
 ![35](./image/35.png)
 
-getBean() 메소드에서 할단된 type 을 인스턴스로 만들어서 리턴하고.   
+getBean() 메소드에서 할단된 type 을 인스턴스로 만들어서 리턴하고, (Customer.class)   
 아래 부분의 코드내에서 읽어온 데이터를 Customer 클래스에 바인딩 처리를 진행한다.
+(binder.bind())
 
 ##### 6. 위 결과로 읽어낸 데이터를 어떻게 itemWriter 에서 사용하는가?
 
@@ -386,7 +405,8 @@ step 을 설정하는 코드를 보면 chunk() 빌더 메소드를 호출한다.
 ![37](./image/37.png)
 
 SimpleStepBuilder 클래스가 상속중인 AbstractTaskletStepBuilder 클래스가 있는데 해당 클래스 내부에
-.build() 메소드가 존재한다.
+.build() 메소드가 존재한다.   
+그리고 TaskletStep() 메소드로 인스턴스를 생성해서 사용하도록 되어 있다.
 
 ![36](./image/36.png)
 
@@ -411,7 +431,7 @@ this.doExecute() 메소드가 호출되므로써 reader 에서 아이템이 읽�
 
 잘 안보이는데.. AbstractStep 클래스의 doExecute() 메소드가 호출되면 TaskletStep 클래스의 doExecute() 가 호출된다.   (위코드는 TaskletStep 의 doExecute() 메소드다)    
 TransactionTemplate 클래스의 execute() 메서드가 실행되고, 
-메소드를 쭉.. 따라가다보면 위에서 생성했던 ChunkOriendtedTasklet 클래스를 다시 보게 된다.
+메소드를 쭉.. 따라가다보면 위에서 createdTasklet() 메소드에서 생성했던 ChunkOriendtedTasklet 클래스를 다시 보게 된다.
 
 ![42](./image/42.png)
 
@@ -422,6 +442,8 @@ TransactionTemplate 클래스의 execute() 메서드가 실행되고,
 #### 필드가 구분자로 구분된 파일
 
 아래와 같이 쉼표(,) 로 구분된 파일을 읽는 방법에 대해 소개한다.
+
+![52](./image/52.png)
 
 ```java
 @Bean
@@ -441,19 +463,22 @@ TransactionTemplate 클래스의 execute() 메서드가 실행되고,
 ```
 
 다른점은 fixedLength() 메소드를 delimited() 로 바꿨고 columns() 빌더 메소드를 제거했다.
+> columns() 메소드는 어디서부터 어디까지 자를지 range 값을 담는 메소드였다. csv 는 , 쉼표로 구분되기 때문에 필요없음.
 
 ![43](./image/43.png)
 
 위 코드는 FlatFileItemReaderBuilder 클래스의 build() 메소드 내부이다. 
 
 > DefaultLineMapper 클래스에 lineTokenizer 를 set 할때   
-> fixedLength() 는 FixedLengthTokenizer 클래스를 사용했고,    
-> delimited() 는 DelimitedLineTokenizer 클래스를 사용한다.   
+> fixedLength() 는 FixedLengthTokenizer 클래스를 사용했고 (this.fixedLengthBuilder.build()),    
+> delimited() 는 DelimitedLineTokenizer 클래스를 사용한다. (this.delimitedBuilder.build())   
 
 아이템을 읽는 클래스인 FlatFileItemReader 에서 read 할때 아래와 같이 DelimetedLineTokenizer 클래스의 doTokenizer() 메소드가 실행되고,
 라인을 디폴트 delimiter 인 "," 로 자른다.
 
 ![45](./image/45.png)
+
+---
 
 fieldSetMapper 는 읽은 데이터를 필드에 매핑하는 역할을 한다.   
 책에서 Customer 클래스를 커스텀하게 변경하는 방법을 소개한다.   
@@ -565,9 +590,21 @@ public class CustomerLineTokenizer implements LineTokenizer {
 4. fieldSetFactory 클래스로부터 FieldSet 을 생성해서 리턴한다.
 
 이렇게 만들어진 FieldSet 은 BeanWrapperFieldSetMapper 클래스에 의해 필드가 매핑된다.
-> BeanWrapperFieldSetMapper 클래스는 FlatFileItemReaderBuilder 의 .build() 메소드내에서 생성 됐었다.
+
+> 위에서 살펴봤듯 FlatFileItemReaderBuilder 클래스의 build() 메소드에서 DefaultLineMapper 클래스의 인스턴스를 생성했었고,   
+>  해당 인스턴스의 mapper 로 BeanWrappterFieldSetMapper 인스턴스를 매개변수로 주는 부분이 존재했었다.
+> 
+
+![54](./image/54.png)
 
 ![47](./image/47.png)
+
+> tokenize() 한 결과를 mapFieldSet() 메소드의 binder.bind() 메소드에 의해 Customer 객체에 매핑된다.
+
+![55](./image/55.png)
+![53](./image/53.png)
+
+
 
 실행 결과는 위의 결과와 동일함.
 
