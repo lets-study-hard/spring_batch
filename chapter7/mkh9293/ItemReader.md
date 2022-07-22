@@ -295,7 +295,7 @@ batch_step_execution_context 필드에 데이터중에 {name}.read.count 가 있
 
 ![24](./image/24.png)
 
-#### 4. fixedLegth() 메소드는 중간에 무슨 역할을 하는가?
+##### 4. fixedLegth() 메소드는 중간에 무슨 역할을 하는가?
 
 ```java
 return new FlatFileItemReaderBuilder<Customer>()
@@ -417,3 +417,158 @@ TransactionTemplate 클래스의 execute() 메서드가 실행되고,
 
 조금 위에서 chunkProvider 는 getReader() 를 할당했었고, chunkProcessor 는 getWriter() 를 할당했었다.   
 예상대로 해당 코드의 provide(), process() 가 예상하는대로 read(), write() 하는 역할을 한다.
+
+
+#### 필드가 구분자로 구분된 파일
+
+아래와 같이 쉼표(,) 로 구분된 파일을 읽는 방법에 대해 소개한다.
+
+```java
+@Bean
+    @StepScope
+    public FlatFileItemReader<Customer> customerItemReader(
+            @Value("#{jobParameters['customerFile']}") Resource inputFile
+    ) {
+
+        return new FlatFileItemReaderBuilder<Customer>()
+                .name("customerItemReader123")
+                .delimited()
+                .names("firstName", "middleInitial", "lastName", "addressNumber", "street", "city", "state","zipCode")
+                .targetType(Customer.class)
+                .resource(inputFile)
+                .build();
+    }
+```
+
+다른점은 fixedLength() 메소드를 delimited() 로 바꿨고 columns() 빌더 메소드를 제거했다.
+
+![43](./image/43.png)
+
+위 코드는 FlatFileItemReaderBuilder 클래스의 build() 메소드 내부이다. 
+
+> DefaultLineMapper 클래스에 lineTokenizer 를 set 할때   
+> fixedLength() 는 FixedLengthTokenizer 클래스를 사용했고,    
+> delimited() 는 DelimitedLineTokenizer 클래스를 사용한다.   
+
+아이템을 읽는 클래스인 FlatFileItemReader 에서 read 할때 아래와 같이 DelimetedLineTokenizer 클래스의 doTokenizer() 메소드가 실행되고,
+라인을 디폴트 delimiter 인 "," 로 자른다.
+
+![45](./image/45.png)
+
+fieldSetMapper 는 읽은 데이터를 필드에 매핑하는 역할을 한다.   
+책에서 Customer 클래스를 커스텀하게 변경하는 방법을 소개한다.   
+
+fieldSetMapper 빌더 메소드에 Customer 클래스 대신 사용할 클래스를 추가하면 된다.
+> 기존 targetType 은 필요 없어졌다.
+
+```java
+return new FlatFileItemReaderBuilder<Customer>()
+                .name("customerItemReader123")
+                .delimited()
+                .names("firstName", "middleInitial", "lastName", "addressNumber", "street", "city", "state","zipCode")
+                .fieldSetMapper(new CustomerFieldSetMapper())
+                .resource(inputFile)
+                .build();
+```
+
+아래와 같이 addresNumber 필드에 street 데이터 까지 같이 매핑한다.
+
+```java
+public class CustomerFieldSetMapper implements FieldSetMapper<Customer> {
+    @Override
+    public Customer mapFieldSet(FieldSet fieldSet) throws BindException {
+        Customer customer = new Customer();
+
+        customer.setAddressNumber(fieldSet.readString("addressNumber") + "" + fieldSet.readString("street"));
+        customer.setCity(fieldSet.readString("city"));
+        customer.setFirstName(fieldSet.readString("firstName"));
+        customer.setLastName(fieldSet.readString("lastName"));
+        customer.setMiddleInitial(fieldSet.readString("middleInitial"));
+        customer.setState(fieldSet.readString("state"));
+        customer.setZipCode(fieldSet.readString("zipCode"));
+
+        return customer;
+    }
+}
+```
+
+결과는 아래와 같다.
+
+![46](./image/46.png)
+
+#### 커스텀 레코드 파싱
+
+위 결과를 다른 방식으로 작업해본다.   
+위에서는 fieldSetMapper 를 새로 구현해서 필드를 원하는 객체에 매핑하도록 작업했었다.
+
+이번에는 lineTokenizer 를 새로 구현해서 객체에 매핑되기전에 필드 자체를 커스텀하게 바꿔본다.
+
+```java
+    @Bean
+    @StepScope
+    public FlatFileItemReader<Customer> customerItemReader(
+            @Value("#{jobParameters['customerFile']}") Resource inputFile
+    ) {
+
+        return new FlatFileItemReaderBuilder<Customer>()
+                .name("customerItemReader123")
+                .lineTokenizer(new CustomerLineTokenizer())
+                .targetType(Customer.class)
+                .resource(inputFile)
+                .build();
+    }
+```
+
+위 예제 스텝과 다른점은 lineTokenizer() 빌더 메소드와 targetType() 빌더 메소드를 추가했다.
+
+간단히 아이템을 파싱하는 방법에는 delimited, fixedLength, custom 3가지 방법이 있는것으로 보인다.
+
+
+아래 코드는 CustomerLineTokenizer 클래스의 코드다.
+
+```java
+public class CustomerLineTokenizer implements LineTokenizer {
+
+    private String[] names = new String[] {
+            "firstName", "middleInitial", "lastName", "addressNumber", "city", "state","zipCode"
+    };
+
+    private String delimiter = ",";
+
+    private FieldSetFactory fieldSetFactory = new DefaultFieldSetFactory();
+
+    @Override
+    public FieldSet tokenize(String s) {
+
+        String[] fields = s.split(delimiter);
+
+        List<String> parsedFields = new ArrayList<>();
+
+        for(int i=0; i<fields.length; i++) {
+            if(i==4) {
+                parsedFields.set(i-1, parsedFields.get(i-1) + " " + fields[i]);
+            } else {
+                parsedFields.add(fields[i]);
+            }
+        }
+
+        return fieldSetFactory.create(parsedFields.toArray(new String[0]), names);
+    }
+}
+```
+
+위 코드는 단순히 아래와 같다.
+
+1. Aimee,C,Hoover,7341,Vel Avenue,Mobile,AL,35928
+2. , 으로 짤라서 배열에 넣고 반복문을 돌린다.
+3. 5번째 데이터일때 (Vel Avenue) 이전 데이터 (7341) 와 함께 set 한다.
+4. fieldSetFactory 클래스로부터 FieldSet 을 생성해서 리턴한다.
+
+이렇게 만들어진 FieldSet 은 BeanWrapperFieldSetMapper 클래스에 의해 필드가 매핑된다.
+> BeanWrapperFieldSetMapper 클래스는 FlatFileItemReaderBuilder 의 .build() 메소드내에서 생성 됐었다.
+
+![47](./image/47.png)
+
+실행 결과는 위의 결과와 동일함.
+
+![48](./image/48.png)
