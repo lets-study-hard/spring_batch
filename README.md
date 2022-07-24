@@ -33,4 +33,4 @@
 |chapter|page|assign|
 |---|---|---|
 |[chapter8]()|all|eunsolJo|
-|[chapter9]()|~411 (~ 데이터베이스 기반 ItemWriter 전까지) |mkh9293|
+|[chapter9]()|~411 (데이터베이스 기반 ItemWriter 전까지) |mkh9293|
