@@ -32,5 +32,12 @@
 
 |chapter|page|assign|
 |---|---|---|
-|[chapter8]()|all|eunsolJo|
-|[chapter9]()|~411 (데이터베이스 기반 ItemWriter 전까지) |mkh9293|
+|[chapter8](https://github.com/lets-study-hard/spring_batch/blob/main/chapter8/ItemProcessor.md)|all|eunsolJo|
+|[chapter9](https://github.com/lets-study-hard/spring_batch/blob/main/chapter9/mkh9293/ItemWriterWithFile.md)|~411 (데이터베이스 기반 ItemWriter 전까지) |mkh9293|
+
+### 5주차
+
+|chapter|page|assign|
+|---|---|---|
+|[chapter9]()|~497 (나머지 전체) |all|
+|[chapter10]()|all |all|
