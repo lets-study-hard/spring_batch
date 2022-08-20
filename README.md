@@ -41,3 +41,11 @@
 |---|---|---|
 |[chapter9]()|~497 (나머지 전체) |all|
 |[chapter10]()|all |all|
+
+### 6주차
+
+|chapter|page|assign|
+|---|---|---|
+|[chapter11]()|~560 (잡 확장하기 전까지) |all|
+|[chapter11]()|~574 (파티셔닝 전까지)|eunsolJo|
+|[chapter11]()|~607 (나머지 전체)|mkh9293|
