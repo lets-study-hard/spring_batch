@@ -47,5 +47,7 @@
 |chapter|page|assign|
 |---|---|---|
 |[chapter11]()|~560 (잡 확장하기 전까지) |all|
-|[chapter11]()|~574 (파티셔닝 전까지)|eunsolJo|
-|[chapter11]()|~607 (나머지 전체)|mkh9293|
+|[chapter11](https://github.com/lets-study-hard/spring_batch/blob/main/chapter11/eunsolJo/jobScalablility.md)|~574 (파티셔닝 전까지)|eunsolJo|
+|[chapter11](https://github.com/lets-study-hard/spring_batch/blob/main/chapter11/mkh9293/partitioning.md)|~607 (나머지 전체)|mkh9293|
+
+### 22/09/10 완료
