@@ -117,7 +117,7 @@ public class Customer {
 ```
 - ``public class BeanValidatingItemProcessor<T> extends ValidatingItemProcessor<T>``
  
-![img.png](img.png)
+![img.png](images/img.png)
 
  : BeanValidatingItemProcessor - JSR-303으로 유효성 검증을 제공하는 ValidatingItemProcessor를 상속한 ItemProcessor
   - ValidatingItemProcessor - Validator 구현체를 통해 유효성 검증
